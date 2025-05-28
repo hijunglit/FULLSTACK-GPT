@@ -4,7 +4,7 @@ from langchain.prompts import PromptTemplate
 st.set_page_config(
     page_title="FullstackGPT Home",
     page_icon="🤖"
-    )
+)
 
 st.markdown(
     """
@@ -14,7 +14,7 @@ st.markdown(
 
     Here are the apps I made:
 
-    - [ ] [DocumentGPT](/DocumentGPT)
+    - [X] [DocumentGPT](/DocumentGPT)
     - [ ] [PrivateGPT](/PrivateGPT)
     - [ ] [QuizGPT](/QuizGPT)
     - [ ] [SiteGPT](/SiteGPT)
