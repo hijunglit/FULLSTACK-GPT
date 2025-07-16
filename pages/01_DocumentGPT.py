@@ -10,7 +10,7 @@ from langchain.callbacks.base import BaseCallbackHandler
 import streamlit as st
 
 st.set_page_config(
-    page_title="FullstackGPT Home",
+    page_title="DocumentGPT",
     page_icon="📃"
 )
 
@@ -130,7 +130,7 @@ if file:
             | llm
         )
         with st.chat_message("ai"):
-            response = chain.invoke(message)
+            chain.invoke(message)
 
 else:
     st.session_state["messages"] = []
