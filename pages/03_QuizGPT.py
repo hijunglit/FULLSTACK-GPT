@@ -1,10 +1,22 @@
-import streamlit as st
-from langchain.retrievers import WikipediaRetriever
+import json
 from langchain.document_loaders import UnstructuredFileLoader
+from langchain.text_splitter import CharacterTextSplitter
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.callbacks import StreamingStdOutCallbackHandler
-from langchain.text_splitter import CharacterTextSplitter
+import streamlit as st
+from langchain.retrievers import WikipediaRetriever
+from langchain.schema import BaseOutputParser
+
+
+class JsonOutputParser(BaseOutputParser):
+
+    def parse(self, text):
+        text = text.replace("```json", "").replace("```", "")
+        return json.loads(text)
+
+
+output_parser = JsonOutputParser()
 
 st.set_page_config(
     page_title="QuizGPT",
@@ -17,9 +29,7 @@ llm = ChatOpenAI(
     temperature=0.1,
     model="gpt-4.1-nano",
     streaming=True,
-    callbacks=[
-        StreamingStdOutCallbackHandler()
-    ]
+    callbacks=[StreamingStdOutCallbackHandler()],
 )
 
 
@@ -32,39 +42,37 @@ questions_prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             """
-        You are a helpful assistant that is role playing as a teacher.
-
-        Based ONLY on the following context make 10 questions to test the user's knowledge about the text.
-
-        Each question should have 4 answers, three of them must be incorrect and one should be correct.
-
-        Use (o) to signal the correct answer.
-
-        Question examples:
-
-        Question: What is the color of the ocean?
-        Answers: Red|Yellow|Green|Blue(o)
-
-        Question: What is the capital or Georgia?
-        Answers: Baku|Tbilisi(o)|Manila|Beirut
-
-        Question: When was Avatar released?
-        Answers: 2007|2001|2009(o)|1998
-
-        Question: Who was Julius Caesar?
-        Answers: A Roman Emperor(o)|Painter|Actor|Model
-
-        Your turn!
-
-        Context: {context}
-    """,
+    You are a helpful assistant that is role playing as a teacher.
+         
+    Based ONLY on the following context make 10 questions to test the user's knowledge about the text.
+    
+    Each question should have 4 answers, three of them must be incorrect and one should be correct.
+         
+    Use (o) to signal the correct answer.
+         
+    Question examples:
+         
+    Question: What is the color of the ocean?
+    Answers: Red|Yellow|Green|Blue(o)
+         
+    Question: What is the capital or Georgia?
+    Answers: Baku|Tbilisi(o)|Manila|Beirut
+         
+    Question: When was Avatar released?
+    Answers: 2007|2001|2009(o)|1998
+         
+    Question: Who was Julius Caesar?
+    Answers: A Roman Emperor(o)|Painter|Actor|Model
+         
+    Your turn!
+         
+    Context: {context}
+""",
         )
     ]
 )
 
-questions_chain = {
-    "context": format_docs
-} | questions_prompt | llm
+questions_chain = {"context": format_docs} | questions_prompt | llm
 
 formatting_prompt = ChatPromptTemplate.from_messages(
     [
@@ -191,7 +199,6 @@ formatting_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-
 formatting_chain = formatting_prompt | llm
 
 
@@ -213,25 +220,27 @@ def split_file(file):
 
 with st.sidebar:
     docs = None
-    choice = st.selectbox("Choose what you want to use.",
-                          (
-                              "File",
-                              "Wikipedia Article"
-                          ),
-                          )
+    choice = st.selectbox(
+        "Choose what you want to use.",
+        (
+            "File",
+            "Wikipedia Article",
+        ),
+    )
     if choice == "File":
-        file = st.file_uploader("Upload a docx, .txt or .pdf file", type=[
-                                "pdf", "txt", "docs"])
+        file = st.file_uploader(
+            "Upload a .docx , .txt or .pdf file",
+            type=["pdf", "txt", "docx"],
+        )
         if file:
             docs = split_file(file)
-            st.write(docs)
     else:
-        topic = st.text_input("Name of the article")
+        topic = st.text_input("Search Wikipedia...")
         if topic:
             retriever = WikipediaRetriever(top_k_results=5)
-            with st.status("Searching wikipedia..."):
+            with st.status("Searching Wikipedia..."):
                 docs = retriever.get_relevant_documents(topic)
-                st.write(docs)
+
 
 if not docs:
     st.markdown(
@@ -244,13 +253,9 @@ if not docs:
     """
     )
 else:
-
     start = st.button("Generate Quiz")
 
     if start:
-        questions_response = questions_chain.invoke(docs)
-        st.write(questions_response.content)
-        formatting_response = formatting_chain.invoke(
-            {"context": questions_response.content}
-        )
-        st.write(formatting_response.content)
+        chain = {"context": questions_chain} | formatting_chain | output_parser
+        response = chain.invoke(docs)
+        st.write(response)
