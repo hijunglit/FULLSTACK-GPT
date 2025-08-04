@@ -39,7 +39,6 @@ llm = ChatOllama(
 )
 
 
-@st.cache_data(show_spinner="Embedding file...")
 def embed_file(file):
     file_content = file.read()
     file_path = f"./.cache/private_files/{file.name}"
@@ -113,7 +112,8 @@ with st.sidebar:
     )
 
 if file:
-    retriever = embed_file(file)
+    with st.spinner("Embedding file..."):
+        retriever = embed_file(file)
     send_message("I'm ready! Ask away!", "ai", save=False)
     paint_history()
     message = st.chat_input("Ask anything about your file...")
@@ -129,7 +129,5 @@ if file:
         )
         with st.chat_message("ai"):
             chain.invoke(message)
-
-
 else:
     st.session_state["messages"] = []

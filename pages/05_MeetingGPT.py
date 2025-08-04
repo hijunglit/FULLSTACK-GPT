@@ -7,9 +7,14 @@ import openai
 import os
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
+from langchain.document_loaders import UnstructuredFileLoader
+from langchain.embeddings import CacheBackedEmbeddings
 from langchain.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import StrOutputParser
+from langchain.storage import LocalFileStore
+from langchain.vectorstores.faiss import FAISS
+from langchain.embeddings import OpenAIEmbeddings
 
 llm = ChatOpenAI(
     temperature=0.1
@@ -18,7 +23,45 @@ llm = ChatOpenAI(
 has_transcript = os.path.exists("./.cache/podcast.txt")
 
 
-@st.cache_data
+def embed_file(file_path):
+    cache_dir = LocalFileStore(f"./.cache/embeddings/{file.name}")
+    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        separator="\n",
+        chunk_size=600,
+        chunk_overlap=100,
+    )
+    loader = UnstructuredFileLoader(file_path)
+    docs = loader.load_and_split(text_splitter=splitter)
+    embeddings = OpenAIEmbeddings()
+    cached_embeddings = CacheBackedEmbeddings.from_bytes_store(
+        embeddings, cache_dir)
+    vectorstore = FAISS.from_documents(docs, cached_embeddings)
+    retriever = vectorstore.as_retriever()
+    return retriever
+
+
+splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+    chunk_size=800,
+    chunk_overlap=100
+)
+
+
+def embed_file(file_path):
+    cache_dir = LocalFileStore(f"./.cache/embeddings/{file.name}")
+    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        chunk_size=800,
+        chunk_overlap=100,
+    )
+    loader = TextLoader(file_path)
+    docs = loader.load_and_split(text_splitter=splitter)
+    embeddings = OpenAIEmbeddings()
+    cached_embeddings = CacheBackedEmbeddings.from_bytes_store(
+        embeddings, cache_dir)
+    vectorstore = FAISS.from_documents(docs, cached_embeddings)
+    retriever = vectorstore.as_retriever()
+    return retriever
+
+
 def transcribe_chunks(chunk_dir, destination):
     if has_transcript:
         return
@@ -34,7 +77,6 @@ def transcribe_chunks(chunk_dir, destination):
             text_file.write(transcript["text"])
 
 
-@st.cache_data
 def extract_audio_from_video(video_path):
     if has_transcript:
         return
@@ -49,7 +91,6 @@ def extract_audio_from_video(video_path):
     subprocess.run(command)
 
 
-@st.cache_data
 def cut_audio_in_chunks(audio_path, chunk_size, chunks_dir):
     if has_transcript:
         return
@@ -126,10 +167,6 @@ if video:
 
             loader = TextLoader(transcript_path)
 
-            splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-                chunk_size=800,
-                chunk_overlap=100
-            )
             docs = loader.load_and_split(text_splitter=splitter)
 
             first_summary_prompt = ChatPromptTemplate.from_template(
@@ -171,3 +208,9 @@ if video:
                     })
                     st.write(summary)
             st.write(summary)
+    with qa_tab:
+        retriever = embed_file(transcript_path)
+
+        docs = retriever.invoke("do they talk about marcus aurelius?")
+
+        st.write(docs)
